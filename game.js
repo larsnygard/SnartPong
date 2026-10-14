@@ -467,6 +467,20 @@ const PongCore = (() => {
   window.addEventListener('mousemove', (ev) => pressMove(ev.clientY));
   window.addEventListener('mouseup', (ev) => pressEnd(ev.clientX, ev.clientY));
 
+  // Mouse wheel: scroll up/down to steer, so no dragging is needed either.
+  // Trackpads send many small deltas, wheels send ~100 per notch — using
+  // the raw delta gives both a natural feel.
+  canvas.addEventListener('wheel', (ev) => {
+    ev.preventDefault();
+    audio.unlock();
+    if (app.screen !== 'play' && app.screen !== 'serve') return;
+    const d = ev.deltaMode === 1 ? ev.deltaY * 16
+            : ev.deltaMode === 2 ? ev.deltaY * PongCore.H
+            : ev.deltaY;
+    app.humanTargetY = Math.max(0,
+      Math.min(PongCore.H - PongCore.PADDLE_H, app.humanTargetY + d * 1.1));
+  }, { passive: false });
+
   // ---- render -----------------------------------------------------------
   function render() {
     const s = app.state;
@@ -474,9 +488,12 @@ const PongCore = (() => {
     ctx.fillRect(0, 0, PongCore.W, PongCore.H);
     ctx.fillStyle = '#fff';
 
-    // centre dashed line, 8 dashes like the original
-    for (let i = 0; i < 8; i++) {
-      ctx.fillRect(PongCore.W / 2 - 4, 40 * i + 40, 8, 40);
+    // Centre dashed line, full height. The title/credit screen hides it, as
+    // in the cabinet (no centre line behind the attract text).
+    if (app.screen !== 'title') {
+      for (let i = 0; i < 8; i++) {
+        ctx.fillRect(PongCore.W / 2 - 4, i * 80, 8, 40);
+      }
     }
 
     // paddles
@@ -496,16 +513,16 @@ const PongCore = (() => {
 
     // ---- overlays ------------------------------------------------------
     if (app.screen === 'title') {
-      drawText('PONG', PongCore.W / 2, 150, 26, '#fff');
-      drawText('FIRST TO 11 WINS', PongCore.W / 2, 270, 8, '#fff');
-      drawText(DIFF[app.aiLevel], PongCore.W / 2, 330, 12, '#fff');
-      drawText('<', 120, 332, 10, '#fff');
-      drawText('>', 680, 332, 10, '#fff');
-      drawText('TAP SIDE TO CHANGE', PongCore.W / 2, 390, 6, '#fff');
+      drawText('PONG', PongCore.W / 2, 120, 26, '#fff');
+      drawText('FIRST TO 11 WINS', PongCore.W / 2, 290, 8, '#fff');
+      drawText(DIFF[app.aiLevel], PongCore.W / 2, 360, 12, '#fff');
+      drawText('<', 120, 362, 10, '#fff');
+      drawText('>', 680, 362, 10, '#fff');
+      drawText('TAP SIDE TO CHANGE', PongCore.W / 2, 440, 6, '#fff');
       if (Math.floor(performance.now() / 500) % 2 === 0) {
-        drawText('TAP TO START', PongCore.W / 2, 450, 9, '#fff');
+        drawText('TAP TO START', PongCore.W / 2, 490, 9, '#fff');
       }
-      drawText(audio.isOn() ? 'SOUND ON' : 'SOUND OFF', PongCore.W / 2, 510, 5, '#fff');
+      drawText(audio.isOn() ? 'SOUND ON' : 'SOUND OFF', PongCore.W / 2, 545, 5, '#fff');
     } else if (app.screen === 'paused') {
       drawText('PAUSED', PongCore.W / 2, 260, 14, '#fff');
       drawText('TAP TO RESUME', PongCore.W / 2, 340, 7, '#fff');
@@ -545,11 +562,21 @@ const PongCore = (() => {
       return;
     }
 
-    let ty = app.humanTargetY;
-    if (app.screen === 'play' && !dragging) {
-      if (keys.has('ArrowUp') || keys.has('KeyW')) ty = app.humanTargetY - PongCore.HUMAN_SPEED * dt;
-      if (keys.has('ArrowDown') || keys.has('KeyS')) ty = app.humanTargetY + PongCore.HUMAN_SPEED * dt;
+    // Keyboard: integrate into the shared target so held keys keep moving
+    // the paddle frame after frame (writing the offset to a local instead
+    // of the target made the keys do nothing). Works during the serve
+    // countdown too, so the player can pre-position before the ball appears.
+    if ((app.screen === 'play' || app.screen === 'serve') && !dragging) {
+      if (keys.has('ArrowUp') || keys.has('KeyW')) {
+        app.humanTargetY -= PongCore.HUMAN_SPEED * dt;
+      }
+      if (keys.has('ArrowDown') || keys.has('KeyS')) {
+        app.humanTargetY += PongCore.HUMAN_SPEED * dt;
+      }
+      app.humanTargetY = Math.max(0,
+        Math.min(PongCore.H - PongCore.PADDLE_H, app.humanTargetY));
     }
+    const ty = app.humanTargetY;
     if (app.screen === 'play') {
       const events = PongCore.step(app.state, dt, ty, app.aiLevel);
       for (const ev of events) {
