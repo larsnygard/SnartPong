@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <title>SnartPong</title>
+  <rect x="0" y="0" width="512" height="512" rx="96" fill="#000000"/>
+    <rect x="58" y="181" width="20" height="150" fill="#ffffff"/>
+    <rect x="434" y="221" width="20" height="150" fill="#ffffff"/>
+    <rect x="300" y="180" width="24" height="24" fill="#ffffff"/>
+    <rect x="251" y="40" width="10" height="28" fill="#ffffff"/>
+    <rect x="251" y="90" width="10" height="28" fill="#ffffff"/>
+    <rect x="251" y="140" width="10" height="28" fill="#ffffff"/>
+    <rect x="251" y="190" width="10" height="28" fill="#ffffff"/>
+    <rect x="251" y="240" width="10" height="28" fill="#ffffff"/>
+    <rect x="251" y="290" width="10" height="28" fill="#ffffff"/>
+    <rect x="251" y="340" width="10" height="28" fill="#ffffff"/>
+    <rect x="251" y="390" width="10" height="28" fill="#ffffff"/>
+    <rect x="251" y="440" width="10" height="28" fill="#ffffff"/>
+</svg>

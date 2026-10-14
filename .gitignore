@@ -1,0 +1,14 @@
+# Dependencies (the browser test uses a shared Playwright install, not a
+# local one — but ignore it if one is ever vendored)
+node_modules/
+package-lock.json
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Local scratch
+/tmp/
+.screenshots-tmp/

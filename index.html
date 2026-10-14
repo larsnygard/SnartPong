@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Snart Pong</title>
+  <meta name="description" content="The classic Pong arcade game, faithful to the 1972 original. Play against the CPU, offline, with the original square-wave bleeps.">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="icons/favicon-32.png" sizes="32x32">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
+  <link rel="stylesheet" href="style.css">
+  <meta name="theme-color" content="#000000">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Pong">
+</head>
+<body>
+  <div id="cabinet">
+    <div id="marquee">PONG</div>
+    <div id="screen">
+      <canvas id="game" width="800" height="600" aria-label="Pong game field"></canvas>
+      <div id="scanlines" aria-hidden="true"></div>
+      <div id="vignette" aria-hidden="true"></div>
+    </div>
+    <div id="bezel-bottom">
+      <span class="credit">CREDIT 00</span>
+      <span class="hint">
+        <span class="key">↑/↓</span> or <span class="key">W/S</span> paddle ·
+        <span class="key">SPACE</span> serve ·
+        <span class="key">P</span> pause
+      </span>
+      <span class="credit">FIRST TO 11</span>
+    </div>
+  </div>
+  <script src="game.js"></script>
+  <script>
+  if ('serviceWorker' in navigator && window.isSecureContext) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch((err) => {
+        console.warn('[snartpong] service worker not registered:', err);
+      });
+    });
+  }
+  </script>
+</body>
+</html>
