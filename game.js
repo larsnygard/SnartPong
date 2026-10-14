@@ -207,7 +207,8 @@ const PongCore = (() => {
   if (!globalThis.document) return; // under Node: core only
 
   const canvas = document.getElementById('game');
-  const ctx = canvas.getContext('2d');
+  // desynchronized: ask the GPU for a low-latency back buffer (helps on mobile)
+  const ctx = canvas.getContext('2d', { desynchronized: true });
   ctx.imageSmoothingEnabled = false;
 
   // ---- block digits, the look of the cabinet --------------------------
@@ -239,6 +240,20 @@ const PongCore = (() => {
     'D': ['1111', '1001', '1001', '1001', '1111'],
     'K': ['1001', '1010', '1100', '1010', '1001'],
     ' ': ['0000', '0000', '0000', '0000', '0000'],
+    // full A-Z so any word renders (B,C,F,H,J,Q,V,X,Y,Z were missing, which
+    // turned "SPACE" into "SPA E" and would break "TAP NEXT GAME").
+    'B': ['1111', '1001', '1110', '1001', '1111'],
+    'C': ['1111', '1000', '1000', '1000', '1111'],
+    'F': ['1111', '1000', '1111', '1000', '1000'],
+    'H': ['1001', '1001', '1111', '1001', '1001'],
+    'J': ['0111', '0010', '0010', '0010', '1110'],
+    'Q': ['1111', '1001', '1001', '1101', '0010'],
+    'V': ['1001', '1001', '1001', '1001', '0110'],
+    'X': ['1001', '0110', '0110', '0110', '1001'],
+    'Y': ['1001', '1001', '0110', '0010', '0010'],
+    'Z': ['1111', '0001', '0011', '0100', '1111'],
+    '<': ['0001', '0010', '0100', '0010', '0001'],
+    '>': ['1000', '0100', '0010', '0100', '1000'],
   };
 
   function drawText(text, cx, top, px, color) {
@@ -262,7 +277,7 @@ const PongCore = (() => {
     }
   }
 
-  // ---- audio: square-wave bleeps, as in the cabinet ---------------------
+  // ---- audio: square-wave beeps, as in the cabinet ----------------------
   const audio = (() => {
     let actx = null;
     let on = true;
@@ -305,7 +320,7 @@ const PongCore = (() => {
   })();
 
   // ---- app state --------------------------------------------------------
-  const DIFF = ['EASY', 'NORMAL', 'HARD', 'EXPRT'];
+  const DIFF = ['EASY', 'NORMAL', 'HARD', 'EXPERT'];
   const app = {
     screen: 'title',        // title | serve | play | point | game | paused
     aiLevel: 1,             // index into AI; 1 = the original single-player
@@ -362,30 +377,95 @@ const PongCore = (() => {
   });
   document.addEventListener('keyup', (ev) => keys.delete(ev.code));
 
-  // touch / mouse: drag anywhere moves the human paddle
+  // ---- touch & mouse: drag to steer, quick tap to advance ----------------
+  // Steering: while a finger/mouse is down, the paddle tracks the pointer 1:1
+  // (no speed cap, so touch never lags behind the finger). A quick, still
+  // press is a TAP: it advances the flow (title→serve, game→next,
+  // play↔pause), so the whole game is playable without a keyboard.
   function pointerY(clientY) {
-    const rect = canvas.getBoundingClientRect();
+    const rect = syncRect();
     return ((clientY - rect.top) / rect.height) * PongCore.H - PongCore.PADDLE_H / 2;
   }
+  // Cache the canvas rect instead of calling getBoundingClientRect() on
+  // every touchmove: the layout read is what made touch steering stutter
+  // on phones. It only changes on resize/rotate, so refresh it there.
+  let cachedRect = null;
+  function syncRect() {
+    if (!cachedRect) cachedRect = canvas.getBoundingClientRect();
+    return cachedRect;
+  }
+  window.addEventListener('resize', () => { cachedRect = null; });
+  window.addEventListener('orientationchange', () => { cachedRect = null; });
   let dragging = false;
+  let pressAt = null;   // { x, y, t } of the current press, for tap detection
+
+  function advance() {
+    audio.unlock();
+    if (app.screen === 'title') startGame();
+    else if (app.screen === 'game') nextGame();
+    else if (app.screen === 'play') app.screen = 'paused';
+    else if (app.screen === 'paused') app.screen = 'play';
+  }
+
+  function pressStart(clientX, clientY) {
+    dragging = true;
+    pressAt = { x: clientX, y: clientY, t: performance.now() };
+    // On the title screen the left/right thirds of the screen change
+    // difficulty, so the game is fully playable without a keyboard.
+    if (app.screen === 'title') {
+      const rect = syncRect();
+      const rel = (clientX - rect.left) / rect.width;
+      if (rel < 0.25) {
+        app.aiLevel = (app.aiLevel + 3) % 4;
+        pressAt.consumed = true;
+        return;
+      }
+      if (rel > 0.75) {
+        app.aiLevel = (app.aiLevel + 1) % 4;
+        pressAt.consumed = true;
+        return;
+      }
+    }
+    app.humanTargetY = pointerY(clientY);
+  }
+  function pressMove(clientY) {
+    if (dragging) app.humanTargetY = pointerY(clientY);
+  }
+  function pressEnd(clientX, clientY) {
+    dragging = false;
+    const p = pressAt;
+    pressAt = null;
+    if (!p || p.consumed) return;
+    const still = performance.now() - p.t < 300 &&
+      Math.hypot(clientX - p.x, clientY - p.y) < 12;
+    if (still) advance();
+  }
+
   canvas.addEventListener('touchstart', (ev) => {
     ev.preventDefault();
-    dragging = true;
     audio.unlock();
-    app.humanTargetY = pointerY(ev.touches[0].clientY);
+    const t = ev.touches[0];
+    pressStart(t.clientX, t.clientY);
   }, { passive: false });
   canvas.addEventListener('touchmove', (ev) => {
     ev.preventDefault();
-    if (dragging) app.humanTargetY = pointerY(ev.touches[0].clientY);
+    pressMove(ev.touches[0].clientY);
   }, { passive: false });
-  canvas.addEventListener('touchend', () => { dragging = false; });
-  canvas.addEventListener('mousedown', (ev) => {
-    dragging = true;
-    audio.unlock();
-    app.humanTargetY = pointerY(ev.clientY);
+  canvas.addEventListener('touchend', (ev) => {
+    ev.preventDefault();
+    const t = ev.changedTouches[0];
+    pressEnd(t.clientX, t.clientY);
+  }, { passive: false });
+  canvas.addEventListener('touchcancel', (ev) => {
+    const t = ev.changedTouches[0];
+    pressEnd(t.clientX, t.clientY);
   });
-  window.addEventListener('mousemove', (ev) => { if (dragging) app.humanTargetY = pointerY(ev.clientY); });
-  window.addEventListener('mouseup', () => { dragging = false; });
+  canvas.addEventListener('mousedown', (ev) => {
+    audio.unlock();
+    pressStart(ev.clientX, ev.clientY);
+  });
+  window.addEventListener('mousemove', (ev) => pressMove(ev.clientY));
+  window.addEventListener('mouseup', (ev) => pressEnd(ev.clientX, ev.clientY));
 
   // ---- render -----------------------------------------------------------
   function render() {
@@ -418,21 +498,23 @@ const PongCore = (() => {
     if (app.screen === 'title') {
       drawText('PONG', PongCore.W / 2, 150, 26, '#fff');
       drawText('FIRST TO 11 WINS', PongCore.W / 2, 270, 8, '#fff');
-      drawText(DIFF[app.aiLevel], PongCore.W / 2, 340, 10, '#fff');
-      drawText('ARROWS CHANGE', PongCore.W / 2, 382, 6, '#fff');
+      drawText(DIFF[app.aiLevel], PongCore.W / 2, 330, 12, '#fff');
+      drawText('<', 120, 332, 10, '#fff');
+      drawText('>', 680, 332, 10, '#fff');
+      drawText('TAP SIDE TO CHANGE', PongCore.W / 2, 390, 6, '#fff');
       if (Math.floor(performance.now() / 500) % 2 === 0) {
-        drawText('PRESS SPACE', PongCore.W / 2, 440, 9, '#fff');
+        drawText('TAP TO START', PongCore.W / 2, 450, 9, '#fff');
       }
       drawText(audio.isOn() ? 'SOUND ON' : 'SOUND OFF', PongCore.W / 2, 510, 5, '#fff');
     } else if (app.screen === 'paused') {
       drawText('PAUSED', PongCore.W / 2, 260, 14, '#fff');
-      drawText('P TO RESUME', PongCore.W / 2, 340, 7, '#fff');
+      drawText('TAP TO RESUME', PongCore.W / 2, 340, 7, '#fff');
     } else if (app.screen === 'game') {
       const humanWon = s.winner === app.humanSide;
       drawText(humanWon ? 'YOU WIN' : 'CPU WINS', PongCore.W / 2, 220, 18, '#fff');
       drawText('SIDE SWAPS', PongCore.W / 2, 330, 8, '#fff');
       if (Math.floor(performance.now() / 500) % 2 === 0) {
-        drawText('SPACE NEXT GAME', PongCore.W / 2, 400, 8, '#fff');
+        drawText('TAP NEXT GAME', PongCore.W / 2, 400, 8, '#fff');
       }
     } else if (app.screen === 'serve' && app.serveTimer > 0) {
       drawText('READY', PongCore.W / 2, 280, 9, '#fff');
@@ -440,18 +522,35 @@ const PongCore = (() => {
   }
 
   // ---- main loop --------------------------------------------------------
+  // Fixed-timestep physics: the simulation always advances in 1/120 s slices
+  // no matter how long a frame took, so the ball moves at constant velocity
+  // on every screen — no choppy jumps when a frame hiccups (common on
+  // phones). Rendering happens once per display frame.
+  const PHYS_STEP = 1 / 120;
+  const MAX_FRAME = 0.25;        // after a long hitch, don't simulate a minute
+  let acc = 0;
   let last = performance.now();
-  function frame(now) {
-    const dt = Math.min((now - last) / 1000, 0.033);
-    last = now;
 
+  function physicsStep(dt) {
     if (app.screen === 'serve') {
       app.serveTimer -= dt;
       if (app.serveTimer <= 0) app.screen = 'play';
-    } else if (app.screen === 'play') {
-      let ty = app.humanTargetY;
+    } else if (app.screen === 'point') {
+      app.pointTimer -= dt;
+      if (app.pointTimer <= 0) {
+        app.screen = 'serve';
+        app.serveTimer = 0.7;
+      }
+    } else if (app.screen !== 'play') {
+      return;
+    }
+
+    let ty = app.humanTargetY;
+    if (app.screen === 'play' && !dragging) {
       if (keys.has('ArrowUp') || keys.has('KeyW')) ty = app.humanTargetY - PongCore.HUMAN_SPEED * dt;
       if (keys.has('ArrowDown') || keys.has('KeyS')) ty = app.humanTargetY + PongCore.HUMAN_SPEED * dt;
+    }
+    if (app.screen === 'play') {
       const events = PongCore.step(app.state, dt, ty, app.aiLevel);
       for (const ev of events) {
         if (ev.type === 'wall') audio.wall();
@@ -462,17 +561,38 @@ const PongCore = (() => {
           if (app.screen === 'point') app.pointTimer = 0.9;
         }
       }
-    } else if (app.screen === 'point') {
-      app.pointTimer -= dt;
-      if (app.pointTimer <= 0) {
-        app.screen = 'serve';
-        app.serveTimer = 0.7;
-      }
     }
+    if (dragging) {
+      // 1:1 finger/mouse follow: overwrite the speed-capped chase with the
+      // exact pointer position, so touch steering never lags behind — even
+      // during the serve countdown, when PongCore.step isn't running.
+      const p = app.state.paddle[app.humanSide];
+      p.y = Math.max(0, Math.min(PongCore.H - PongCore.PADDLE_H, ty));
+    }
+  }
 
+  function frame(now) {
+    // Clamp the frame delta: too big (a hitch) would simulate a minute of
+    // play at once; negative (clock skew) would drain the accumulator.
+    let frameTime = (now - last) / 1000;
+    if (frameTime < 0) frameTime = 0;
+    if (frameTime > MAX_FRAME) frameTime = MAX_FRAME;
+    last = now;
+    acc += frameTime;
+    while (acc >= PHYS_STEP) {
+      physicsStep(PHYS_STEP);
+      acc -= PHYS_STEP;
+    }
     render();
     requestAnimationFrame(frame);
   }
+
+  // The clock reset on return from the background prevents a big jump after
+  // the phone app-switches or the tab is hidden (rAF pauses while hidden).
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) { last = performance.now(); acc = 0; }
+  });
+
   requestAnimationFrame((now) => { last = now; requestAnimationFrame(frame); });
 })();
 

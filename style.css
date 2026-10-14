@@ -12,13 +12,19 @@ body {
   align-items: center;
   justify-content: center;
   min-height: 100vh;
+  min-height: 100dvh;
   overflow: hidden;
   -webkit-font-smoothing: none;
+  /* keep the game in place: no rubber-band scroll, no double-tap zoom */
+  overscroll-behavior: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 #cabinet {
   width: min(94vw, 1100px);
   max-height: 96vh;
+  max-height: 96dvh;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -35,10 +41,13 @@ body {
   user-select: none;
 }
 
-/* The screen is a 4:3 box (800x600) scaled to fit, kept crisp. */
+/* The screen is a 4:3 box (800x600) scaled to fit, kept crisp. The width
+ * also caps on the available height (minus marquee + bezel), so the
+ * cabinet never overflows the viewport on short/landscape phones. */
 #screen {
   position: relative;
-  width: 100%;
+  width: min(100%, calc((96vh - 92px) * 4 / 3));
+  width: min(100%, calc((96dvh - 92px) * 4 / 3));
   aspect-ratio: 4 / 3;
   background: #000;
   border: 3px solid #2a2a2a;
@@ -101,13 +110,20 @@ body {
   flex-wrap: wrap;
 }
 .credit { opacity: 0.8; }
-.hint .key {
+.hint-keyboard .key {
   color: #cfcfcf;
   border: 1px solid #555;
   border-radius: 3px;
   padding: 0 4px;
   margin: 0 2px;
   background: #151515;
+}
+
+/* Touch phones: the keyboard hints are useless, show the touch ones. */
+.hint-touch { display: none; }
+@media (hover: none), (pointer: coarse) {
+  .hint-keyboard { display: none; }
+  .hint-touch { display: inline; }
 }
 
 @media (max-height: 640px) {

@@ -13,7 +13,7 @@
  */
 'use strict';
 
-const VERSION = 'v1';
+const VERSION = 'v2';
 const CACHE = `snartpong-${VERSION}`;
 
 // Keep this list in step with what index.html actually loads — test/pwa.js

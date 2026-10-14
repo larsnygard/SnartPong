@@ -1,7 +1,7 @@
 {
   "name": "Snart Pong — The 1972 Arcade Classic",
   "short_name": "Pong",
-  "description": "The classic Pong arcade game, faithful to the 1972 original. Play against the CPU, first to 11, square-wave bleeps, full retro CRT feel. Installs as an app and plays offline.",
+  "description": "The classic Pong arcade game, faithful to the 1972 original. Play against the CPU, first to 11, square-wave beeps, full retro CRT feel. Installs as an app and plays offline.",
   "id": "./",
   "start_url": "./",
   "scope": "./",
