@@ -321,6 +321,9 @@ const PongCore = (() => {
 
   // ---- app state --------------------------------------------------------
   const DIFF = ['EASY', 'NORMAL', 'HARD', 'EXPERT'];
+  // Dotted centre line: 8px square dots on a 16px pitch. (600 - 8) % 16 == 0,
+  // so the dots land exactly flush with both the top and bottom edges.
+  const PONG_DOT_PITCH = 16;
   const app = {
     screen: 'title',        // title | serve | play | point | game | paused
     aiLevel: 1,             // index into AI; 1 = the original single-player
@@ -488,11 +491,13 @@ const PongCore = (() => {
     ctx.fillRect(0, 0, PongCore.W, PongCore.H);
     ctx.fillStyle = '#fff';
 
-    // Centre dashed line, full height. The title/credit screen hides it, as
-    // in the cabinet (no centre line behind the attract text).
+    // Centre line, dotted like the arcade original: 8px square dots on an
+    // even 16px pitch. (600 - 8) % 16 == 0, so a dot sits flush at the top
+    // edge and one ends flush at the bottom — full height, even rhythm.
+    // Hidden on the title screen (no centre line behind the attract text).
     if (app.screen !== 'title') {
-      for (let i = 0; i < 8; i++) {
-        ctx.fillRect(PongCore.W / 2 - 4, i * 80, 8, 40);
+      for (let y = 0; y <= PongCore.H - 8; y += PONG_DOT_PITCH) {
+        ctx.fillRect(PongCore.W / 2 - 4, y, 8, 8);
       }
     }
 
